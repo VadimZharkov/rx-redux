@@ -6,6 +6,9 @@ import io.reactivex.disposables.Disposable;
 import io.reactivex.functions.Consumer;
 import io.reactivex.subjects.PublishSubject;
 
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -22,25 +25,21 @@ import java.util.concurrent.atomic.AtomicReference;
 public class Store<State> implements AutoCloseable {
     private final PublishSubject<State> subject;
     private final Observable<State> changes;
-    private final AtomicReference<State> state;
     private final Reducer<State> reducer;
+    private final Dispatcher dispatcher;
 
-    public Store(@NonNull State state, @NonNull Reducer<State> reducer) {
+    private volatile State state;
+
+    public Store(@NonNull State state, @NonNull Reducer<State> reducer, List<Middleware<State>> middlewares) {
         this.subject = PublishSubject.create();
         this.changes = subject.hide();
-        this.state = new AtomicReference<>(state);
+        this.state = state;
         this.reducer = reducer;
+        this.dispatcher = applyMiddleware(middlewares);
     }
 
     public void dispatch(@NonNull Action action) {
-        final var wrapper = new Object() { State next = null; };
-        state.updateAndGet(prev -> {
-            if (wrapper.next == null) {
-                wrapper.next = reducer.reduce(prev, action);
-            }
-            return wrapper.next;
-        });
-        subject.onNext(wrapper.next);
+        dispatcher.dispatch(action);
     }
 
     /**
@@ -51,8 +50,8 @@ public class Store<State> implements AutoCloseable {
     }
 
     @NonNull
-    public State state() {
-        return state.get();
+    public State getState() {
+        return state;
     }
 
     public final Disposable subscribe(@NonNull Consumer<State> onNext) {
@@ -70,5 +69,30 @@ public class Store<State> implements AutoCloseable {
     @Override
     public void close() {
         subject.onComplete();
+    }
+
+    /**
+     * Middleware is applied in the order in which it is passed into method.
+     * @param middlewares List of Middleware<State>
+     * @return Dispatcher
+     */
+    @NonNull
+    private Dispatcher applyMiddleware(List<Middleware<State>> middlewares) {
+        if (middlewares == null) {
+            return this::internalDispatch;
+        }
+
+        Collections.reverse(middlewares);
+
+        return middlewares
+                .stream()
+                .reduce(this::internalDispatch,
+                        (dispatcher, middleware) -> middleware.apply(this::dispatch, this::getState).apply(dispatcher),
+                        Dispatcher::combiner);
+    }
+    
+    private synchronized void internalDispatch(@NonNull Action action) {
+        state = reducer.reduce(getState(), action);
+        subject.onNext(getState());
     }
 }

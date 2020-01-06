@@ -1,16 +1,20 @@
 package example;
 
 import com.vzharkov.rx.redux.Action;
+import com.vzharkov.rx.redux.Middleware;
 import com.vzharkov.rx.redux.Reducer;
 import com.vzharkov.rx.redux.Store;
 import io.reactivex.Observable;
 
+import java.util.Arrays;
+import java.util.Collections;
+
 class Actions {
-    static final Action INCREMENT = new Action() {};
-    static final Action DECREMENT = new Action() {};
-    static final Action START_PROCESSING = new Action() {};
-    static final Action STOP_PROCESSING = new Action() {};
-    static final Action PROCESSING_ERROR = new Action() {};
+    static final Action INCREMENT = new Action() { public String toString() { return "INCREMENT"; } };
+    static final Action DECREMENT = new Action() { public String toString() { return "DECREMENT"; } };
+    static final Action START_PROCESSING = new Action() { public String toString() { return "START_PROCESSING"; } };
+    static final Action STOP_PROCESSING = new Action() { public String toString() { return "STOP_PROCESSING"; } };
+    static final Action PROCESSING_ERROR = new Action() { public String toString() { return "PROCESSING_ERROR"; } };
 
     /**
      *  Action creator.
@@ -80,15 +84,23 @@ public class Main {
     };
 
     public static void main(String[] args) throws InterruptedException {
-        try (final var store = new Store<>(new State(0), reducer)) {
+        final Middleware<State> logger = (dispatcher, getState) -> (next) -> (action) -> {
+            System.out.println("Logger: dispatching " + action);
+            next.dispatch(action);
+            System.out.println("Logger: next state = " + getState.get());
+        };
+
+        try (final var store = new Store<>(new State(0), reducer, Collections.singletonList(logger))) {
             store.subscribe(
-                    state -> System.out.println(state),
-                    error -> error.printStackTrace(),
+                    state -> System.out.println("Subscriber: state = " + state),
+                    Throwable::printStackTrace,
                     () -> System.out.println("Done")
             );
+
             store.dispatch(Actions.INCREMENT);
             store.dispatch(Actions.DECREMENT);
             store.dispatch(Actions.PROCESS);
+
             Thread.sleep(2000);
         }
     }

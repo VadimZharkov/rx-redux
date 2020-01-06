@@ -20,7 +20,7 @@ class StoreTest {
                     Thread.sleep(1000);
                     emitter.onNext(Actions.STOP_PROCESSING);
                     emitter.onComplete();
-                } catch (InterruptedException e) {
+                  } catch (InterruptedException e) {
                     e.printStackTrace();
                     emitter.onNext(Actions.PROCESSING_ERROR);
                     emitter.onComplete();
@@ -74,16 +74,16 @@ class StoreTest {
 
     @Test
     void whenAnActionIsFiredReducerShouldUpdateTheState() {
-        final var store = new Store<>(new State(0), reducer);
+        final var store = new Store<>(new State(0), reducer, null);
         store.dispatch(Actions.INCREMENT);
 
-        assertEquals(1, store.state().counter());
+        assertEquals(1, store.getState().counter());
     }
 
     @Test
     void subscribersShouldBeNotifiedWhenTheStateWasChanged() {
         final var wrapper = new Object() { int counter = 0; };
-        final var store = new Store<>(new State(0), reducer);
+        final var store = new Store<>(new State(0), reducer, null);
         store.subscribe(state -> wrapper.counter = state.counter());
         store.dispatch(Actions.INCREMENT);
 
@@ -93,7 +93,7 @@ class StoreTest {
     @Test
     void actionCreatorShouldFireTwoActions() {
         final var wrapper = new Object() { int count = 0; };
-        final var store = new Store<>(new State(0), reducer);
+        final var store = new Store<>(new State(0), reducer, null);
         store.subscribe(state -> wrapper.count++);
         store.dispatch(Actions.PROCESS);
 
