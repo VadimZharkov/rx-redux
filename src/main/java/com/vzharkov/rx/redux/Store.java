@@ -6,10 +6,8 @@ import io.reactivex.disposables.Disposable;
 import io.reactivex.functions.Consumer;
 import io.reactivex.subjects.PublishSubject;
 
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * The Store is the object that brings state, actions and reducer together.
@@ -27,15 +25,15 @@ public class Store<State> implements AutoCloseable {
     private final Observable<State> changes;
     private final Reducer<State> reducer;
     private final Dispatcher dispatcher;
-
+    private final Object lock = new Object();
     private volatile State state;
 
     public Store(@NonNull State state, @NonNull Reducer<State> reducer, List<Middleware<State>> middlewares) {
         this.subject = PublishSubject.create();
         this.changes = subject.hide();
-        this.state = state;
         this.reducer = reducer;
         this.dispatcher = applyMiddleware(middlewares);
+        this.state = state;
     }
 
     public void dispatch(@NonNull Action action) {
@@ -91,8 +89,10 @@ public class Store<State> implements AutoCloseable {
                         Dispatcher::combiner);
     }
     
-    private synchronized void internalDispatch(@NonNull Action action) {
-        state = reducer.reduce(getState(), action);
-        subject.onNext(getState());
+    private void internalDispatch(@NonNull Action action) {
+        synchronized (lock) {
+            state = reducer.reduce(getState(), action);
+            subject.onNext(getState());
+        }
     }
 }
